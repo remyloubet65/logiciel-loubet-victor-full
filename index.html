@@ -1,12 +1,75 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Logiciel Loubet-Victor</title>
-  </head>
-  <body style="margin:0;background:#f6f7f8;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PF Loubet-Victor — MVP</title>
+<style>
+  body{font-family:system-ui,Arial;margin:24px;max-width:900px}
+  h1{margin:0 0 12px} form,.card{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
+  label{display:block;margin:8px 0 4px} input{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px}
+  button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{border:1px solid #eee;padding:8px;text-align:left}
+</style>
+</head>
+<body>
+<h1>PF Loubet-Victor — MVP</h1>
+
+<div class="card"><strong>Connexion Supabase</strong> <div id="status">⏳ Initialisation…</div></div>
+
+<form id="f-add">
+  <h2>Ajouter un défunt</h2>
+  <div class="row">
+    <div><label>Nom</label><input id="lastname" required /></div>
+    <div><label>Prénom</label><input id="firstname" required /></div>
+  </div>
+  <label>Date de décès</label><input id="dod" type="date" />
+  <div style="margin-top:12px"><button type="submit">Enregistrer</button></div>
+</form>
+
+<div class="card">
+  <h2>Recherche</h2>
+  <input id="q" placeholder="Nom ou prénom…" />
+  <button id="b-search">Rechercher</button>
+  <div id="results"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.getElementById('status').textContent = '✅ Prêt (clé anonyme)';
+
+async function list(q=""){
+  const ilike = q ? `%${q}%` : "%";
+  const { data, error } = await sb.from('decedents')
+    .select('*')
+    .or(`lastname.ilike.${ilike},firstname.ilike.${ilike}`)
+    .order('created_at',{ascending:false})
+    .limit(50);
+  if(error){ return alert(error.message); }
+  const rows = (data||[]).map(d=>`<tr>
+    <td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||""}</td>
+    <td>${new Date(d.created_at).toLocaleString()}</td></tr>`).join('');
+  document.getElementById('results').innerHTML =
+    `<table><thead><tr><th>Nom</th><th>Prénom</th><th>Date décès</th><th>Créé le</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+document.getElementById('f-add').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const lastname = document.getElementById('lastname').value.trim();
+  const firstname = document.getElementById('firstname').value.trim();
+  const dod = document.getElementById('dod').value || null;
+  const { error } = await sb.from('decedents').insert([{ lastname, firstname, date_of_death: dod }]);
+  if(error){ return alert(error.message); }
+  e.target.reset(); list("");
+});
+document.getElementById('b-search').addEventListener('click', (e)=>{
+  e.preventDefault(); list(document.getElementById('q').value.trim());
+});
+list("");
+</script>
+</body>
 </html>
