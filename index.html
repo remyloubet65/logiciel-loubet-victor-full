@@ -1,61 +1,43 @@
 <!doctype html>
 <meta charset="utf-8">
+<title>PFV — DEBUG Supabase</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PFV — Diagnostic réseau</title>
 <style>
   body{font-family:system-ui,Arial;margin:24px;max-width:900px}
   .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
-  pre{background:#f7f7f7;padding:12px;border-radius:8px;white-space:pre-wrap}
   .ok{color:#13721e}.err{color:#b00020}
+  pre{background:#f7f7f7;padding:10px;border-radius:8px}
 </style>
 
-<h1>PFV — Diagnostic réseau</h1>
-
+<h1>PFV — DEBUG Supabase</h1>
 <div class="box">
-  <b>1) REST direct</b> → <span id="r1">⏳</span>
-  <pre id="o1"></pre>
-</div>
-
-<div class="box">
-  <b>2) Client supabase-js</b> → <span id="r2">⏳</span>
-  <pre id="o2"></pre>
+  <div><strong>Statut :</strong> <span id="status">⏳ Initialisation…</span></div>
+  <div id="details"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <script>
-  const BASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
-  const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
+const statusEl = document.getElementById('status');
+const detailsEl = document.getElementById('details');
 
-  // --- Test 1: REST direct
-  (async () => {
-    try {
-      const resp = await fetch(BASE_URL + "/rest/v1/decedents?select=id&limit=1", {
-        headers: { apikey: KEY, Authorization: "Bearer " + KEY }
-      });
-      const text = await resp.text();
-      document.getElementById("r1").innerHTML = resp.ok ? '<span class="ok">OK</span>' : '<span class="err">HTTP '+resp.status+'</span>';
-      document.getElementById("o1").textContent = text || "(vide)";
-    } catch (e) {
-      document.getElementById("r1").innerHTML = '<span class="err">FAILED</span>';
-      document.getElementById("o1").textContent = (e && e.message) ? e.message : String(e);
-    }
-  })();
+const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9zZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
 
-  // --- Test 2: client supabase-js
-  (async () => {
-    try {
-      const sb = window.supabase.createClient(BASE_URL, KEY);
-      const { data, error } = await sb.from('decedents').select('id').limit(1);
-      if (error) {
-        document.getElementById("r2").innerHTML = '<span class="err">ERROR</span>';
-        document.getElementById("o2").textContent = JSON.stringify(error, null, 2);
-      } else {
-        document.getElementById("r2").innerHTML = '<span class="ok">OK</span>';
-        document.getElementById("o2").textContent = JSON.stringify(data, null, 2);
-      }
-    } catch (e) {
-      document.getElementById("r2").innerHTML = '<span class="err">FAILED</span>';
-      document.getElementById("o2").textContent = (e && e.message) ? e.message : String(e);
-    }
-  })();
+(async () => {
+  try {
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    statusEl.textContent = "🔎 Test…";
+    const r1 = await sb.from('decedents').select('id').limit(1);
+    if (r1.error) { statusEl.innerHTML = '<span class="err">❌ '+r1.error.message+'</span>'; return; }
+    const r2 = await sb.from('prestations').select('id').limit(1);
+    if (r2.error) { statusEl.innerHTML = '<span class="err">❌ '+r2.error.message+'</span>'; return; }
+    statusEl.innerHTML = '<span class="ok">✅ Connecté à Supabase</span>';
+    detailsEl.innerHTML = '<pre>'+JSON.stringify({
+      decedents_rows: (r1.data||[]).length,
+      prestations_rows: (r2.data||[]).length
+    }, null, 2)+'</pre>';
+  } catch(e){
+    statusEl.innerHTML = '<span class="err">❌ '+(e.message||e)+'</span>';
+  }
+})();
 </script>
