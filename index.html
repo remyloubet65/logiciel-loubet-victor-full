@@ -38,29 +38,40 @@
     <div id="pageTarifs" style="display:none"></div>
     <div id="pageDevis" style="display:none"></div>
 
-    <script>
-      const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
-      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
-      const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      const statusEl = document.getElementById("status");
+   <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+<script>
+  // --- CONFIG (vérifie bien ces 2 lignes) ---
+  const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";   // <-- avec le "y"
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
 
-      // Gestion des onglets
-      const pages = { Dossiers: pageDossiers, Tarifs: pageTarifs, Devis: pageDevis };
-      for (const k in pages){
-        document.getElementById("btn"+k).onclick = () => {
-          for (const kk in pages){ pages[kk].style.display = kk===k ? "" : "none"; document.getElementById("btn"+kk).classList.toggle("active", kk===k); }
-        }
-      }
+  const statusEl = document.getElementById('status');
+  const set = (txt, ok=false) => statusEl.innerHTML = ok ? `✅ ${txt}` : `❌ ${txt}`;
 
-      async function init(){
-        statusEl.textContent = "⏳ Connexion...";
-        const test = await sb.from("decedents").select("id").limit(1);
-        if(test.error){ statusEl.innerHTML = `<span class="err">❌ Erreur : ${test.error.message}</span>`; return; }
-        statusEl.innerHTML = `<span class="ok">✅ Prêt (clé anonyme)</span>`;
-        loadDossiers();
-        loadTarifs();
-        loadDevis();
-      }
+  let sb;
+  try {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    set("Init client: " + (e?.message || e));
+    throw e;
+  }
+
+  // petit ping avant de lancer l'app
+  (async () => {
+    try {
+      const { data, error } = await sb.from('decedents').select('id').limit(1);
+      if (error) { set("SELECT decedents: " + error.message); return; }
+      set("Prêt (clé anonyme)", true);
+
+      // expose le client pour le reste du fichier
+      window.sb = sb;
+
+      // si tu as une fonction init() plus bas, appelle-la ici
+      if (typeof init === "function") init();
+    } catch (e) {
+      set("Fetch error: " + (e?.message || e));
+    }
+  })();
+</script>
 
       // ------------------------
       // DOSSIERS
