@@ -1,159 +1,57 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <title>PF Loubet-Victor — Logiciel Funéraire</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-      body{font-family:system-ui,Arial;margin:24px;max-width:1000px}
-      h1{margin-bottom:10px}
-      .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0;background:#fff}
-      .tabs{display:flex;gap:10px;margin-bottom:12px}
-      button{padding:8px 14px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:#f6f6f6}
-      button:hover{background:#e8e8e8}
-      .active{background:#c8e6c9!important;border-color:#4caf50!important}
-      input,select{padding:6px 8px;margin:4px 0;border:1px solid #ccc;border-radius:6px;width:100%}
-      table{width:100%;border-collapse:collapse;margin-top:10px}
-      th,td{border:1px solid #ddd;padding:6px;text-align:left}
-      th{background:#f7f7f7}
-      .ok{color:#13721e;font-weight:600}
-      .err{color:#b00020;font-weight:600}
-    </style>
-  </head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PFV — Test App Minimal</title>
 
-  <body>
-    <h1>PF Loubet-Victor — Logiciel Funéraire</h1>
-    <div class="box">
-      <b>Connexion Supabase :</b> <span id="status">⏳ Initialisation…</span>
-    </div>
+<style>
+  body{font-family:system-ui,Arial;margin:24px;max-width:900px}
+  .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{border:1px solid #eee;padding:6px;text-align:left}
+  button{padding:8px 12px;border:1px solid #ccc;border-radius:8px;background:#f7f7f7;cursor:pointer}
+</style>
 
-    <div class="tabs">
-      <button id="btnDossiers" class="active">📁 Dossiers</button>
-      <button id="btnTarifs">💶 Tarifs</button>
-      <button id="btnDevis">📜 Devis</button>
-    </div>
+<h1>PFV — Test App Minimal</h1>
+<div class="box"><b>Connexion Supabase :</b> <span id="status">⏳ Initialisation…</span></div>
+<div class="box">
+  <button id="btn">🔄 Recharger la liste</button>
+  <div id="out"></div>
+</div>
 
-    <div id="pageDossiers"></div>
-    <div id="pageTarifs" style="display:none"></div>
-    <div id="pageDevis" style="display:none"></div>
-
-   <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+<!-- UMD – même CDN que la page DEBUG qui fonctionne -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <script>
-  // --- CONFIG (vérifie bien ces 2 lignes) ---
-  const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";   // <-- avec le "y"
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
-
   const statusEl = document.getElementById('status');
-  const set = (txt, ok=false) => statusEl.innerHTML = ok ? `✅ ${txt}` : `❌ ${txt}`;
+  const out = document.getElementById('out');
+
+  // 🔧 Tes vraies valeurs (URL corrigée avec le "y")
+  const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
 
   let sb;
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) {
-    set("Init client: " + (e?.message || e));
+    statusEl.textContent = "❌ Init client: " + (e?.message || e);
     throw e;
   }
 
-  // petit ping avant de lancer l'app
-  (async () => {
+  async function pingAndList(){
     try {
-      const { data, error } = await sb.from('decedents').select('id').limit(1);
-      if (error) { set("SELECT decedents: " + error.message); return; }
-      set("Prêt (clé anonyme)", true);
-
-      // expose le client pour le reste du fichier
-      window.sb = sb;
-
-      // si tu as une fonction init() plus bas, appelle-la ici
-      if (typeof init === "function") init();
+      statusEl.textContent = "🔎 Test SELECT…";
+      const { data, error } = await sb.from('decedents').select('*').order('created_at',{ascending:false}).limit(50);
+      if (error) { statusEl.textContent = "❌ SELECT decedents: " + error.message; out.innerHTML=""; return; }
+      statusEl.textContent = "✅ Prêt (clé anonyme)";
+      out.innerHTML = `<table><thead><tr><th>Nom</th><th>Prénom</th><th>Date décès</th></tr></thead><tbody>${
+        (data||[]).map(d=>`<tr><td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||''}</td></tr>`).join('')
+      }</tbody></table>`;
     } catch (e) {
-      set("Fetch error: " + (e?.message || e));
+      statusEl.textContent = "❌ Fetch error: " + (e?.message || e);
     }
-  })();
+  }
+
+  document.getElementById('btn').onclick = pingAndList;
+  pingAndList();
 </script>
-
-      // ------------------------
-      // DOSSIERS
-      // ------------------------
-      async function loadDossiers(){
-        const { data } = await sb.from("decedents").select("*").order("created_at",{ascending:false});
-        pageDossiers.innerHTML = `
-          <div class="box">
-            <h3>Ajouter un défunt</h3>
-            <input id="nom" placeholder="Nom">
-            <input id="prenom" placeholder="Prénom">
-            <input id="date" type="date">
-            <button onclick="addDefunt()">💾 Enregistrer</button>
-          </div>
-          <table><tr><th>Nom</th><th>Prénom</th><th>Date de décès</th><th>Créé le</th></tr>
-          ${(data||[]).map(d=>`<tr><td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||""}</td><td>${d.created_at.split("T")[0]}</td></tr>`).join("")}</table>`;
-      }
-
-      async function addDefunt(){
-        const nom = document.getElementById("nom").value.trim();
-        const prenom = document.getElementById("prenom").value.trim();
-        const date = document.getElementById("date").value;
-        if(!nom||!prenom){ alert("Nom et prénom obligatoires"); return; }
-        await sb.from("decedents").insert({ lastname: nom, firstname: prenom, date_of_death: date });
-        loadDossiers();
-      }
-
-      // ------------------------
-      // TARIFS
-      // ------------------------
-      async function loadTarifs(){
-        const { data } = await sb.from("prestations").select("*").order("id");
-        pageTarifs.innerHTML = `
-          <div class="box">
-            <h3>Catalogue des prestations</h3>
-            <button onclick="newTarif()">➕ Ajouter</button>
-          </div>
-          <table><tr><th>Nom</th><th>Prix (€)</th><th>Actions</th></tr>
-          ${(data||[]).map(p=>`<tr>
-            <td contenteditable onblur="updateTarif(${p.id},this.innerText,'nom')">${p.nom}</td>
-            <td contenteditable onblur="updateTarif(${p.id},this.innerText,'prix')">${p.prix}</td>
-            <td><button onclick="deleteTarif(${p.id})">🗑️</button></td>
-          </tr>`).join("")}</table>`;
-      }
-
-      async function newTarif(){
-        await sb.from("prestations").insert({ nom:"Nouvelle prestation", prix:0 });
-        loadTarifs();
-      }
-
-      async function updateTarif(id,val,field){
-        const patch={}; patch[field]=field==="prix"?Number(val):val;
-        await sb.from("prestations").update(patch).eq("id",id);
-      }
-
-      async function deleteTarif(id){
-        if(!confirm("Supprimer cette prestation ?"))return;
-        await sb.from("prestations").delete().eq("id",id);
-        loadTarifs();
-      }
-
-      // ------------------------
-      // DEVIS
-      // ------------------------
-      async function loadDevis(){
-        const { data } = await sb.from("devis").select("*").order("created_at",{ascending:false});
-        pageDevis.innerHTML = `
-          <div class="box">
-            <h3>Liste des devis</h3>
-            <button onclick="newDevis()">➕ Nouveau devis</button>
-          </div>
-          <table><tr><th>Référence</th><th>Client</th><th>Date</th></tr>
-          ${(data||[]).map(d=>`<tr><td>${d.ref}</td><td>${d.client||""}</td><td>${d.created_at.split("T")[0]}</td></tr>`).join("")}</table>`;
-      }
-
-      async function newDevis(){
-        const ref="DV-"+Date.now().toString().slice(-6);
-        await sb.from("devis").insert({ ref, client:"" });
-        loadDevis();
-      }
-
-      init();
-    </script>
-  </body>
 </html>
