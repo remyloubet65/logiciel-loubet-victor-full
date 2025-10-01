@@ -78,28 +78,25 @@ const statusEl = document.getElementById('status');
 const setStatus = t => statusEl.textContent = t;
 const € = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(n)||0);
 
-// ⬇️ RENSEIGNE TES VALEURS
+// ⬇️ REMPLACE ICI
 const SUPABASE_URL = "https://aoidadxujanxpxctbyvb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
 
 let sb;
-try {
-  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} catch (e) {
-  setStatus("❌ "+(e.message||e)); throw e;
-}
-setStatus("🔎 Test…");
+try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+catch(e){ setStatus("❌ "+(e.message||e)); throw e; }
 
 (async ()=>{
+  // Ping
   const ping = await sb.from('decedents').select('id').limit(1);
   if (ping.error){ setStatus("❌ "+ping.error.message); return; }
   setStatus("✅ Prêt (clé anonyme)");
 
   // Onglets
   const panes={ dossiers:'pane-dossiers', tarifs:'pane-tarifs', devis:'pane-devis' };
-  function show(id){ for(const k in panes){ 
-    document.getElementById(panes[k]).style.display=(k===id?'block':'none');
-    document.getElementById('tab-'+k).classList.toggle('active',k===id);
+  function show(id){ for(const k in panes){
+    document.getElementById(panes[k]).style.display = (k===id?'block':'none');
+    document.getElementById('tab-'+k).classList.toggle('active', k===id);
   }}
   document.getElementById('tab-dossiers').onclick=()=>show('dossiers');
   document.getElementById('tab-tarifs').onclick =()=>{ show('tarifs'); loadPrestations(); };
