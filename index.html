@@ -25,4 +25,166 @@ try {
     }
     setStatus("✅ Prêt (clé anonyme)");
 
-    // === Fonctions de l'ap
+    // === Fonctions de l'app ===
+    const € = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(n)||0);
+
+    async function renderDecedents(list){
+      const rows = (list||[]).map(d=>`<tr>
+        <td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||""}</td>
+        <td>${new Date(d.created_at).toLocaleString()}</td></tr>`).join('');
+      document.getElementById('results').innerHTML =
+        `<table><thead><tr><th>Nom</th><th>Prénom</th><th>Date décès</th><th>Créé le</th></tr></thead><tbody>${rows}</tbody></table>`+
+        ((list&&list.length)?"":"<div style='color:#666;margin-top:8px'>Aucun enregistrement.</div>");
+    }
+
+    async function listDecedents(q=""){
+      const ilike = q ? `%${q}%` : "%";
+      const { data, error } = await sb.from('decedents').select('*')
+        .or(`lastname.ilike.${ilike},firstname.ilike.${ilike}`)
+        .order('created_at',{ascending:false}).limit(50);
+      if (error) return showErr(error);
+      renderDecedents(data);
+    }
+
+    document.getElementById('btn-save').onclick = async ()=>{
+      const lastname = document.getElementById('lastname').value.trim();
+      const firstname = document.getElementById('firstname').value.trim();
+      const dod = document.getElementById('dod').value || null;
+      if(!lastname || !firstname){ return showErr("Nom/Prénom requis"); }
+      const { error } = await sb.from('decedents').insert([{ lastname, firstname, date_of_death: dod }]);
+      if (error) return showErr(error);
+      document.getElementById('lastname').value='';
+      document.getElementById('firstname').value='';
+      document.getElementById('dod').value='';
+      listDecedents("");
+    };
+
+    document.getElementById('btn-search').onclick = ()=> listDecedents(document.getElementById('q').value.trim());
+
+    // Tarifs
+    async function loadPrestations(){
+      const { data, error } = await sb.from('prestations').select('*').order('id',{ascending:false});
+      if (error) return showErr(error);
+      const tbody = document.querySelector('#p-table tbody');
+      if(!tbody) return; // onglet pas encore ouvert
+      tbody.innerHTML = (data||[]).map(p=>`
+        <tr>
+          <td><input value="${p.nom||''}" data-id="${p.id}" data-k="nom"></td>
+          <td><input type="number" step="0.01" value="${p.prix||0}" data-id="${p.id}" data-k="prix"></td>
+          <td><button data-del="${p.id}" class="btn gray">Supprimer</button></td>
+        </tr>`).join('');
+      tbody.querySelectorAll('input').forEach(inp=>{
+        inp.onchange=async()=>{
+          const id=Number(inp.dataset.id), k=inp.dataset.k, v=(k==='prix'?Number(inp.value):inp.value);
+          const { error } = await sb.from('prestations').update({[k]:v}).eq('id',id);
+          if (error) showErr(error);
+        };
+      });
+      tbody.querySelectorAll('button[data-del]').forEach(b=>{
+        b.onclick=async()=>{ const id=Number(b.dataset.del); const {error}=await sb.from('prestations').delete().eq('id',id); if(error) showErr(error); loadPrestations(); };
+      });
+    }
+    document.getElementById('p-add')?.addEventListener('click', async ()=>{
+      const { error } = await sb.from('prestations').insert({ nom:'', prix:0 });
+      if (error) return showErr(error);
+      loadPrestations();
+    });
+
+    // Devis
+    let dvLines=[];
+    function renderDevisLines(){
+      const tbody=document.querySelector('#dv-table tbody'); if(!tbody) return;
+      tbody.innerHTML=dvLines.map((l,i)=>`
+        <tr><td>${l.libelle}</td><td>${l.qte}</td><td>${€(l.pu)}</td><td>${€(l.qte*l.pu)}</td>
+        <td><button class="btn gray" data-i="${i}">Retirer</button></td></tr>`).join('');
+      tbody.querySelectorAll('button[data-i]').forEach(b=>{
+        b.onclick=()=>{ dvLines.splice(Number(b.dataset.i),1); renderDevisLines(); };
+      });
+      const total=dvLines.reduce((s,l)=>s+Number(l.qte)*Number(l.pu),0);
+      const tot=document.getElementById('dv-total'); if(tot) tot.textContent=€(total);
+    }
+    async function loadPrestationsIntoSelect(){
+      const { data, error } = await sb.from('prestations').select('*').order('nom');
+      if(error) return showErr(error);
+      const sel=document.getElementById('dv-presta'); if(!sel) return;
+      sel.innerHTML='';
+      (data||[]).forEach(p=>{
+        const o=document.createElement('option'); o.value=JSON.stringify(p); o.textContent=`${p.nom} — ${€(p.prix)}`;
+        sel.appendChild(o);
+      });
+    }
+    document.getElementById('dv-add')?.addEventListener('click', ()=>{
+      const sel=document.getElementById('dv-presta'); if(!sel) return;
+      const p=JSON.parse(sel.value||'{}');
+      const qte=Number(document.getElementById('dv-qte').value||1);
+      const pu=Number(document.getElementById('dv-pu').value||p.prix||0);
+      if(!p.nom){ return showErr("Choisis une prestation"); }
+      dvLines.push({libelle:p.nom,qte,pu}); renderDevisLines();
+    });
+    document.getElementById('dv-save')?.addEventListener('click', async ()=>{
+      const client=(document.getElementById('dv-client')?.value||'').trim();
+      const ref=(document.getElementById('dv-ref')?.value||'').trim() || `DEV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+      if(!client) return showErr("Client requis");
+      if(dvLines.length===0) return showErr("Ajoute au moins une ligne");
+      const { data:dv, error } = await sb.from('devis').insert({ref,client}).select().single();
+      if(error) return showErr(error);
+      const lines=dvLines.map(l=>({devis_id:dv.id,libelle:l.libelle,qte:l.qte,pu:l.pu}));
+      const ins=await sb.from('devis_lignes').insert(lines);
+      if(ins.error) return showErr(ins.error);
+      dvLines=[]; renderDevisLines();
+      document.getElementById('dv-client').value=''; document.getElementById('dv-ref').value='';
+      listDevis();
+    });
+    async function listDevis(){
+      const wrap=document.getElementById('dv-list'); if(!wrap) return;
+      const { data:ds, error } = await sb.from('devis').select('id,ref,client,created_at').order('id',{ascending:false}).limit(50);
+      if(error) return showErr(error);
+      wrap.innerHTML = (ds||[]).map(d=>`<div class="card">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+          <div><strong>${d.ref}</strong><div class="muted">${d.client} — ${new Date(d.created_at).toLocaleString()}</div></div>
+          <button class="btn gray" data-open="${d.id}">Voir</button>
+        </div>
+        <div id="dv-view-${d.id}" style="display:none;margin-top:8px"></div>
+      </div>`).join('');
+      wrap.querySelectorAll('button[data-open]').forEach(b=>{
+        b.onclick=async()=>{
+          const id=Number(b.dataset.open);
+          const { data:head } = await sb.from('devis').select('*').eq('id',id).single();
+          const { data:lg }   = await sb.from('devis_lignes').select('*').eq('devis_id',id);
+          const total=(lg||[]).reduce((s,l)=>s+Number(l.qte)*Number(l.pu),0);
+          const el=document.getElementById('dv-view-'+id);
+          el.style.display=el.style.display==='none'?'block':'none';
+          el.innerHTML=`<table><thead><tr><th>Libellé</th><th>Qté</th><th>PU</th><th>Total</th></tr></thead><tbody>${
+            (lg||[]).map(l=>`<tr><td>${l.libelle}</td><td>${l.qte}</td><td>${€(l.pu)}</td><td>${€(l.qte*l.pu)}</td></tr>`).join('')
+          }</tbody></table><div class="right" style="margin-top:8px"><strong>Total : ${€(total)}</strong></div>`;
+        };
+      });
+    }
+
+    // Onglets
+    const panes={ dossiers:'pane-dossiers', tarifs:'pane-tarifs', devis:'pane-devis' };
+    function show(id){
+      for(const k in panes){
+        const el=document.getElementById(panes[k]);
+        const btn=document.getElementById('tab-'+k);
+        if(el) el.style.display = (k===id?'block':'none');
+        if(btn) btn.classList.toggle('active', k===id);
+      }
+      if(id==='tarifs') loadPrestations();
+      if(id==='devis'){ loadPrestationsIntoSelect(); listDevis(); }
+    }
+    document.getElementById('tab-dossiers').onclick=()=>show('dossiers');
+    document.getElementById('tab-tarifs').onclick=()=>show('tarifs');
+    document.getElementById('tab-devis').onclick =()=>show('devis');
+
+    // Démarrage
+    listDecedents("");
+  })();
+} catch(e) {
+  setStatus("❌ Erreur initialisation");
+  showErr(e);
+}
+
+// Attraper toute erreur JS
+window.addEventListener('error', ev => setStatus("❌ " + ev.message));
+</script>
