@@ -2,56 +2,98 @@
 <html lang="fr">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PFV — Test App Minimal</title>
-
+<title>PFV — Registre défunts</title>
 <style>
   body{font-family:system-ui,Arial;margin:24px;max-width:900px}
   .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
   table{width:100%;border-collapse:collapse;margin-top:10px}
   th,td{border:1px solid #eee;padding:6px;text-align:left}
   button{padding:8px 12px;border:1px solid #ccc;border-radius:8px;background:#f7f7f7;cursor:pointer}
+  .ok{color:#13721e}.err{color:#b00020}
 </style>
 
-<h1>PFV — Test App Minimal</h1>
-<div class="box"><b>Connexion Supabase :</b> <span id="status">⏳ Initialisation…</span></div>
+<h1>PF Loubet-Victor — Registre</h1>
+
 <div class="box">
-  <button id="btn">🔄 Recharger la liste</button>
-  <div id="out"></div>
+  <b>Connexion Supabase :</b> <span id="status">⏳ Initialisation…</span>
 </div>
 
-<!-- UMD – même CDN que la page DEBUG qui fonctionne -->
+<div class="box">
+  <h3>Ajouter un défunt</h3>
+  <input id="nom" placeholder="Nom">
+  <input id="prenom" placeholder="Prénom">
+  <input id="dod" type="date">
+  <button id="add">💾 Enregistrer</button>
+</div>
+
+<div class="box">
+  <div style="display:flex;gap:8px;align-items:center">
+    <h3 style="margin:0">Liste</h3>
+    <button id="reload">🔄 Recharger</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+<!-- UMD: même CDN que la page DEBUG -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <script>
-  const statusEl = document.getElementById('status');
-  const out = document.getElementById('out');
+  var statusEl = document.getElementById('status');
+  var listEl = document.getElementById('list');
 
-  // 🔧 Tes vraies valeurs (URL corrigée avec le "y")
-  const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
+  // ⚙️ Tes valeurs (URL CORRIGÉE avec le "y")
+  var SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
 
-  let sb;
+  // Crée le client
+  var sb;
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) {
-    statusEl.textContent = "❌ Init client: " + (e?.message || e);
+    statusEl.innerHTML = '<span class="err">Init client: ' + (e && e.message ? e.message : e) + '</span>';
     throw e;
   }
 
-  async function pingAndList(){
-    try {
-      statusEl.textContent = "🔎 Test SELECT…";
-      const { data, error } = await sb.from('decedents').select('*').order('created_at',{ascending:false}).limit(50);
-      if (error) { statusEl.textContent = "❌ SELECT decedents: " + error.message; out.innerHTML=""; return; }
-      statusEl.textContent = "✅ Prêt (clé anonyme)";
-      out.innerHTML = `<table><thead><tr><th>Nom</th><th>Prénom</th><th>Date décès</th></tr></thead><tbody>${
-        (data||[]).map(d=>`<tr><td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||''}</td></tr>`).join('')
-      }</tbody></table>`;
-    } catch (e) {
-      statusEl.textContent = "❌ Fetch error: " + (e?.message || e);
+  // Liste simple sans template literals
+  function renderRows(rows){
+    var html = '<table><thead><tr><th>Nom</th><th>Prénom</th><th>Date décès</th><th>Créé le</th></tr></thead><tbody>';
+    for (var i=0;i<rows.length;i++){
+      var d = rows[i];
+      html += '<tr><td>'+ (d.lastname||'') +'</td><td>'+ (d.firstname||'') +'</td><td>'+ (d.date_of_death||'') +'</td><td>'+ new Date(d.created_at).toLocaleString() +'</td></tr>';
+    }
+    html += '</tbody></table>';
+    listEl.innerHTML = html;
+  }
+
+  async function load(){
+    statusEl.textContent = '🔎 Test SELECT…';
+    try{
+      var res = await sb.from('decedents').select('*').order('created_at',{ascending:false}).limit(50);
+      if (res.error){
+        statusEl.innerHTML = '<span class="err">SELECT decedents: '+ res.error.message +'</span>';
+        listEl.innerHTML = '';
+        return;
+      }
+      statusEl.innerHTML = '<span class="ok">✅ Prêt (clé anonyme)</span>';
+      renderRows(res.data||[]);
+    }catch(e){
+      statusEl.innerHTML = '<span class="err">Fetch error: '+ (e && e.message ? e.message : e) +'</span>';
     }
   }
 
-  document.getElementById('btn').onclick = pingAndList;
-  pingAndList();
+  async function addDefunt(){
+    var nom = document.getElementById('nom').value.trim();
+    var prenom = document.getElementById('prenom').value.trim();
+    var dod = document.getElementById('dod').value || null;
+    if(!nom || !prenom){ alert('Nom et prénom obligatoires'); return; }
+    var ins = await sb.from('decedents').insert({ lastname: nom, firstname: prenom, date_of_death: dod });
+    if (ins.error){ alert(ins.error.message); return; }
+    document.getElementById('nom').value=''; document.getElementById('prenom').value=''; document.getElementById('dod').value='';
+    load();
+  }
+
+  document.getElementById('reload').onclick = load;
+  document.getElementById('add').onclick = addDefunt;
+
+  load();
 </script>
 </html>
