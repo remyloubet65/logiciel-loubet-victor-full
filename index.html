@@ -1,69 +1,113 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>PFV — DEBUG Supabase</title>
-<style>
-  body{font-family:system-ui,Arial;margin:24px;max-width:900px}
-  code{background:#f4f4f4;padding:2px 6px;border-radius:6px}
-  .ok{color:#13721e} .err{color:#b00020}
-  .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
-</style>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>PF Loubet-Victor — MVP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      body{font-family:system-ui,Arial;margin:24px;max-width:900px}
+      button{padding:8px 14px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;cursor:pointer}
+      button:hover{background:#eee}
+      input{padding:6px 8px;width:100%;margin:4px 0;border:1px solid #ccc;border-radius:6px}
+      .tabs{display:flex;gap:8px;margin:10px 0}
+      .tabs button.active{background:#e8f5e9;border-color:#4caf50}
+      .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}
+      table{width:100%;border-collapse:collapse;margin-top:10px}
+      th,td{border:1px solid #ddd;padding:6px;text-align:left}
+      th{background:#f7f7f7}
+    </style>
+  </head>
 
-<h1>PFV — DEBUG Supabase</h1>
+  <body>
+    <h1>PF Loubet-Victor — MVP</h1>
+    <div class="box">
+      <b>Connexion Supabase</b> <span id="status">⏳ Initialisation...</span>
+    </div>
 
-<div class="box">
-  <div><strong>Statut :</strong> <span id="status">⏳ Initialisation…</span></div>
-  <div id="details"></div>
-</div>
+    <div class="tabs">
+      <button id="tabDossiers" class="active">📁 Dossiers</button>
+      <button id="tabTarifs">💶 Tarifs</button>
+      <button id="tabDevis">📜 Devis</button>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-const statusEl = document.getElementById('status');
-const detailsEl = document.getElementById('details');
-const set = (html)=>detailsEl.innerHTML = html;
-const mask = (s)=>!s ? '(vide)' : s.length<=12 ? s : s.slice(0,8)+'…'+s.slice(-4);
+    <div id="pageDossiers" class="page"></div>
+    <div id="pageTarifs" class="page" style="display:none"></div>
+    <div id="pageDevis" class="page" style="display:none"></div>
 
-// ⬇️ RENSEIGNE BIEN TES VALEURS ICI
-const SUPABASE_URL = "https://aoidadxujanxpxctbyvb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
-function showEnv(){
-  set(`
-    <p>URL: <code>${mask(SUPABASE_URL)}</code></p>
-    <p>Key: <code>${mask(SUPABASE_ANON_KEY)}</code> (len=${(SUPABASE_ANON_KEY||'').length})</p>
-  `);
-}
-showEnv();
+    <script>
+      const SUPABASE_URL = "https://aoidadxujanyxpxctbyvb.supabase.co";
+      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvaWRhZHh1amFueHB4Y3RieXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDYyNzYsImV4cCI6MjA3NDg4MjI3Nn0.Iaf6J_KzUzRNddUE6Mq6xTJW0xKc7eR6FU3OtW2CwHw";
+      const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const statusEl = document.getElementById('status');
 
-(async function run(){
-  try{
-    if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
-      statusEl.innerHTML = '<span class="err">❌ URL ou clé manquante</span>'; return;
-    }
-    if(!/^https:\/\/.*\.supabase\.co$/.test(SUPABASE_URL)){
-      statusEl.innerHTML = '<span class="err">❌ Mauvais format d’URL Supabase</span>'; return;
-    }
+      // --- Onglets
+      const pages = { dossiers: pageDossiers, tarifs: pageTarifs, devis: pageDevis };
+      const setTab = (t) => {
+        for (const [id, el] of Object.entries(pages)) el.style.display = id === t ? '' : 'none';
+        document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.id === 'tab' + t.charAt(0).toUpperCase() + t.slice(1)));
+      };
+      tabDossiers.onclick = () => setTab('dossiers');
+      tabTarifs.onclick = () => setTab('tarifs');
+      tabDevis.onclick = () => setTab('devis');
 
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    statusEl.textContent = '🔎 Test SELECT…';
+      async function init(){
+        statusEl.textContent = "⏳ Connexion...";
+        const { error } = await supabase.from("decedents").select("*").limit(1);
+        if (error) { statusEl.innerHTML = "❌ Erreur : " + error.message; return; }
+        statusEl.innerHTML = "✅ Prêt (clé anonyme)";
+        loadDossiers();
+        loadTarifs();
+        loadDevis();
+      }
 
-    // Test 1 : ping décédents
-    const r1 = await sb.from('decedents').select('*').limit(1);
-    if(r1.error){
-      statusEl.innerHTML = '<span class="err">❌ Erreur SELECT decedents</span>';
-      set(`<pre>${JSON.stringify(r1.error, null, 2)}</pre>`); return;
-    }
+      // --- Dossiers
+      async function loadDossiers(){
+        const { data } = await supabase.from("decedents").select("*").order("created_at", { ascending: false });
+        pageDossiers.innerHTML = `
+          <div class="box">
+            <h3>Ajouter un défunt</h3>
+            <input id="nom" placeholder="Nom">
+            <input id="prenom" placeholder="Prénom">
+            <input id="date" type="date">
+            <button onclick="addDefunt()">Enregistrer</button>
+          </div>
+          <table><tr><th>Nom</th><th>Prénom</th><th>Date décès</th><th>Créé le</th></tr>
+          ${(data||[]).map(d=>`<tr><td>${d.lastname}</td><td>${d.firstname}</td><td>${d.date_of_death||''}</td><td>${d.created_at.split('T')[0]}</td></tr>`).join('')}</table>`;
+      }
+      async function addDefunt(){
+        const nom = document.getElementById("nom").value;
+        const prenom = document.getElementById("prenom").value;
+        const date = document.getElementById("date").value;
+        await supabase.from("decedents").insert({ lastname: nom, firstname: prenom, date_of_death: date });
+        loadDossiers();
+      }
 
-    // Test 2 : ping prestations
-    const r2 = await sb.from('prestations').select('id').limit(1);
-    if(r2.error){
-      statusEl.innerHTML = '<span class="err">❌ Erreur SELECT prestations</span>';
-      set(`<pre>${JSON.stringify(r2.error, null, 2)}</pre>`); return;
-    }
+      // --- Tarifs
+      async function loadTarifs(){
+        const { data } = await supabase.from("prestations").select("*").order("id");
+        pageTarifs.innerHTML = `
+          <div class="box"><h3>Catalogue des prestations</h3></div>
+          <table><tr><th>Nom</th><th>Prix (€)</th></tr>
+          ${(data||[]).map(p=>`<tr><td>${p.nom}</td><td>${p.prix}</td></tr>`).join('')}</table>`;
+      }
 
-    statusEl.innerHTML = '<span class="ok">✅ Connecté à Supabase</span>';
-    set(`<pre>${JSON.stringify({decedents_rows: r1.data?.length||0, prestations_rows: r2.data?.length||0}, null, 2)}</pre>`);
-  }catch(e){
-    statusEl.innerHTML = '<span class="err">❌ Exception JS</span>';
-    set(`<pre>${(e && e.message) ? e.message : String(e)}</pre>`);
-  }
-})();
-</script>
+      // --- Devis
+      async function loadDevis(){
+        const { data } = await supabase.from("devis").select("*").order("created_at",{ascending:false});
+        pageDevis.innerHTML = `
+          <div class="box"><h3>Liste des devis</h3>
+          <button onclick="newDevis()">➕ Nouveau devis</button></div>
+          <table><tr><th>Réf</th><th>Client</th><th>Créé le</th></tr>
+          ${(data||[]).map(d=>`<tr><td>${d.ref}</td><td>${d.client}</td><td>${d.created_at.split('T')[0]}</td></tr>`).join('')}</table>`;
+      }
+      async function newDevis(){
+        const ref = "DV-" + Date.now().toString().slice(-6);
+        await supabase.from("devis").insert({ ref, client: "" });
+        loadDevis();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
